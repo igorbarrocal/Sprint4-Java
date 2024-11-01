@@ -1,13 +1,27 @@
-ppackage org.example.Resources;
+package org.example;
  
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.ClientBuilder;
+import jakarta.ws.rs.client.WebTarget;
 import org.example.Model.Cliente;
+import org.example.Resources.ClienteResource;
 import org.example.Service.ClienteServico;
+import org.glassfish.grizzly.http.server.HttpServer;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
  
 import java.sql.SQLException;
 import java.util.List;
+ 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.*;
  
 @Path("myresource") // Base URI
 public class ClienteResource {
@@ -15,12 +29,23 @@ public class ClienteResource {
     private final ClienteServico clienteServico = new ClienteServico();
  
     @GET
-    @Path("buscarTodos")
+    @Path("buscarTodos") // No PostMan: http://localhost:8080/myresource/buscarTodos
     @Produces(MediaType.APPLICATION_JSON)
     public Response buscarTodos() {
         try {
             List<Cliente> listaClientes = clienteServico.buscarTodos();
             return Response.ok(listaClientes).build();
+        } catch (SQLException e) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(e.getMessage()).build();
+        }
+    }
+ 
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("buscarClienteID") // No PostMan: http://localhost:8080/myresource/buscarClienteID?id=1
+    public Response buscarClienteID(@QueryParam("id") int id) {
+        try {
+            return Response.ok(clienteServico.buscarClienteID(id)).build();
         } catch (SQLException e) {
             return Response.status(Response.Status.BAD_REQUEST).entity(e.getMessage()).build();
         }
@@ -40,7 +65,7 @@ public class ClienteResource {
     }
  
     @PUT
-    @Path("atualizaDados")
+    @Path("atualizaDados") // No PostMan: http://localhost:8080/myresource/atualizaDados?id=1&nome=NovoNome
     @Produces(MediaType.TEXT_PLAIN)
     public Response atualizaDados(@QueryParam("id") int id, @QueryParam("nome") String nome) {
         try {
@@ -52,7 +77,7 @@ public class ClienteResource {
     }
  
     @DELETE
-    @Path("deleta")
+    @Path("deleta") // No PostMan: http://localhost:8080/myresource/deleta?id=1
     @Produces(MediaType.TEXT_PLAIN)
     public Response deleta(@QueryParam("id") int id) {
         try {
@@ -61,5 +86,66 @@ public class ClienteResource {
         } catch (SQLException e) {
             return Response.status(Response.Status.BAD_REQUEST).entity(e.getMessage()).build();
         }
+    }
+}
+ 
+class MyResourceTest {
+ 
+    private HttpServer server;
+    private WebTarget target;
+ 
+    @Mock
+    private ClienteServico clienteServico;
+ 
+    @InjectMocks
+    private ClienteResource resource;
+ 
+    @BeforeEach
+    public void setUp() throws Exception {
+        MockitoAnnotations.openMocks(this);
+        server = Main.startServer();
+        Client c = ClientBuilder.newClient();
+        target = c.target(Main.BASE_URI);
+    }
+ 
+    @AfterEach
+    public void tearDown() throws Exception {
+        server.stop();
+    }
+ 
+    @Test
+    public void testGetIt() {
+        String responseMsg = target.path("myresource").request().get(String.class);
+        assertEquals("Got it!", responseMsg);
+    }
+ 
+    @Test
+    public void testAdicionarComSucesso() throws SQLException {
+        Cliente cliente = new Cliente(); // Inicialize o cliente conforme necessário
+        doNothing().when(clienteServico).adicionar(cliente);
+        Response response = resource.adicionar(cliente);
+        verify(clienteServico, times(1)).adicionar(cliente);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertEquals("Cliente adicionado com sucesso", response.getEntity());
+    }
+ 
+    @Test
+    public void testDeletarComSucesso() throws SQLException {
+        int id = 1;
+        doNothing().when(clienteServico).deletar(id);
+        Response response = resource.deleta(id);
+        verify(clienteServico, times(1)).deletar(id);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertEquals("Deletado com sucesso", response.getEntity());
+    }
+ 
+    @Test
+    public void testDeletarComErro() throws SQLException {
+        int id = 1;
+        doThrow(new SQLException("Erro ao deletar")).when(clienteServico).deletar(id);
+        Response response = resource.deleta(id);
+        verify(clienteServico, times(1)).deletar(id);
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
+        assertEquals("Erro ao deletar", response.getEntity());
     }
 }
