@@ -1,9 +1,9 @@
-package DAO;
+package Camada DAO;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 
-public class Carro {
+public class ConexaoBD {
     public static Connection con=null;// variável de classe conexão
     static String server="oracle.fiap.com.br";
     static String port="1521";
